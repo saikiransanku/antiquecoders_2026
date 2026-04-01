@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules/
 frontend/node_modules/
 training/data/raw/*
@@ -14,3 +15,7 @@ django_out.txt
 server_log.txt
 server_output.txt
 server_output_utf8.txt
+=======
+# Ignore processed training data artifacts
+training/data/processed/
+>>>>>>> 20ea8379c4dc40c60511061a28dda0e9d23993f9
