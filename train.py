@@ -1,9 +1,3 @@
-"""
-train.py
-Training script that orchestrates data loading, model creation, training phases, evaluation and saving.
-
-Usage: python train.py
-"""
 import os
 import time
 import random
