@@ -12,8 +12,33 @@ from torch.cuda.amp import autocast, GradScaler
 
 import config
 from dataset import create_dataloaders
-import model as model_module
+# Import the local `model.py` safely. If a different installed package named
+# `model` shadows the local file, fall back to loading by file path so the
+# expected `get_mobilenet_v3` and `unfreeze_backbone` are available.
+try:
+    import model as model_module
+    if not hasattr(model_module, "get_mobilenet_v3"):
+        raise ImportError("Imported 'model' module does not expose 'get_mobilenet_v3'")
+except Exception:
+    import importlib.util
+    import os
+    spec = importlib.util.spec_from_file_location("local_model", os.path.join(os.path.dirname(__file__), "model.py"))
+    model_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(model_module)
+
 import utils
+
+
+def make_plateau_scheduler(optimizer, mode='min', patience=3, factor=0.5):
+    """Instantiate ReduceLROnPlateau compatibly across PyTorch versions.
+
+    Some older/newer PyTorch versions differ in whether they accept a
+    `verbose` keyword. Try with `verbose=True` first, fall back otherwise.
+    """
+    try:
+        return optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=mode, patience=patience, factor=factor, verbose=True)
+    except TypeError:
+        return optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=mode, patience=patience, factor=factor)
 
 
 def set_seed(seed=42):
@@ -99,7 +124,7 @@ def main():
         criterion = nn.CrossEntropyLoss(weight=weight)
 
     optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=config.LR_PHASE1, weight_decay=config.WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3, factor=0.5, verbose=True)
+    scheduler = make_plateau_scheduler(optimizer, mode='min', patience=3, factor=0.5)
     scaler = GradScaler()
 
     history = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": []}
@@ -153,7 +178,7 @@ def main():
     model_module.unfreeze_backbone(model, fraction=0.3)
 
     optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=config.LR_PHASE2, weight_decay=config.WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=4, factor=0.5, verbose=True)
+    scheduler = make_plateau_scheduler(optimizer, mode='min', patience=4, factor=0.5)
 
     best_val_loss_phase2 = best_val_loss
     early_stop_counter = 0
